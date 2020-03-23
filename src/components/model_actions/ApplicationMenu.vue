@@ -11,16 +11,29 @@
       <a data-menudisplay="['adaptation_state','adaptation_hardware','adaptation_binding_state_hardware']" @click="adaptation_state_source_code_generation()" class="dropdown-item">Source code generation</a>
       <component :is="dynamicComponent" :current_graph="current_graph"></component>
     </div>
-
+	<vue-snotify></vue-snotify>
   </li>
 </template>
 
 <script>
+
+import Vue from 'vue';
 import axios from "axios";
+
+import Snotify, { SnotifyPosition, SnotifyToast } from 'vue-snotify';
+import VueClipboard from 'vue-clipboard2' // Debug purpose
+
 import di_actions from '@/assets/js/models/actions/domain_implementation/di_actions.js';
 import "@/assets/js/chart/Chart.min.js";
 import { setupModal, modalH3, modalSimpleText, modalInputTexts, modalCustomization, modalButton, downloadFile } from '../../assets/js/common/util.js';
+import 'vue-snotify/styles/material.css';
 import adaptation_state_actions from '@/assets/js/models/actions/domain_implementation/adaptation_state_actions.js';
+
+VueClipboard.config.autoSetContainer = true;
+Vue.config.productionTip = false;
+
+Vue.use(Snotify);
+Vue.use(VueClipboard);
 
 export default {
   data: function() {
@@ -357,19 +370,23 @@ export default {
       }
       return "";
     },
+	doCopy(text) {
+      this.$copyText(text).then(function (e) {
+        console.log(e)
+      }, function (e) {
+        console.log(e)
+      })
+    },
     adaptation_state_source_code_generation() {
       try {
-        ///let serverUrl = localStorage["domain_implementation_main_path"] + "AdaptationStateImplementation/generateSourceCode";
-        let serverUrl = localStorage["domain_implementation_main_path"];
-        //alert(serverUrl);
+		
+        let serverUrl = localStorage["domain_implementation_main_path"] + "/CodeGenerator/Arduino";
         let directory = "MiProyecto"; // localStorage["domain_implementation_pool_path"];
-        //alert(directory);
+		
         let modelJson = adaptation_state_actions( this.current_graph, "serializeJson"); 
-        var strModelJson=JSON.stringify(modelJson);  
-        //alert(strModelJson);
-        downloadFile("BindingStateHardwareModel.json", strModelJson);
-
-        var createCORSRequest = function(method, url) {
+        var strModelJson = JSON.stringify(modelJson);
+		
+        /*var createCORSRequest = function(method, url) {
           var xhr = new XMLHttpRequest();
           if ("withCredentials" in xhr) {
             // Most browsers.
@@ -385,32 +402,106 @@ export default {
           return xhr;
         };
 
-        var url = serverUrl;
-        var method = 'POST';
-        var xhr = createCORSRequest(method, url);
+        //var url = serverUrl;
+        //var method = 'POST';
+        //var xhr = createCORSRequest(method, url);
 
         xhr.onload = function() {
           // Success code goes here.
-          //alert('bien');
         };
 
         xhr.onerror = function() {
           // Error code goes here.
-         // alert('Ha ocurrido un error en la solicitud.');
+         alert('Ha ocurrido un error en la solicitud.');
         };
 
         xhr.onreadystatechange = function () {
           if (xhr.readyState == 4 && xhr.status == 200) {
-            //alert("Respuesta: " + xhr.responseText);
+            alert("Respuesta: " + xhr.responseText);
             downloadFile("Arduino.ino", xhr.responseText);
           }
-        }
+        }*/
+		
+		var createCORSRequest = function(method, url) {
 
-        xhr.send(strModelJson); 
+          var xhr = new XMLHttpRequest();
+
+          if ("withCredentials" in xhr) {
+            // Most browsers.
+            xhr.open(method, url, true);
+          } else if (typeof XDomainRequest != "undefined") {
+            // IE8 & IE9
+            xhr = new XDomainRequest();
+            xhr.open(method, url);
+          } else {
+            // CORS not supported.
+            xhr = null;
+            return;
+          }
+
+          return new Promise((resolve, reject) => {
+
+            xhr.onreadystatechange = function () {
+
+              if (xhr.readyState !== 4) return;
+
+              if (xhr.status >= 200 && xhr.status < 300) {
+                resolve(xhr);
+              } else {
+                reject({
+                  status: xhr.status,
+                  statusText: xhr.statusText
+                });
+              }
+
+            };
+
+            xhr.send(strModelJson); 
+
+          });
+
+        };
+		
+		var url = serverUrl;
+        var method = 'POST';
+
+		let vm = this;
+
+		let snotifyPromise = new Promise((resolve, reject) => {
+          createCORSRequest(method, url, snotifyPromise)
+            .then((xhr) => resolve({
+                title: 'Completed',
+                body: 'The code has been generated.',
+                config: {
+                  closeOnClick: true,
+                  timeout: 10000,
+                  showProgressBar: true,
+                  closeOnClick: false,
+                  pauseOnHover: true,
+                  buttons: [
+                    {text: 'Copy', action: () => vm.doCopy(xhr.responseText), bold: true},
+					{text: 'Download INO', action: () => downloadFile("Arduino.ino", xhr.responseText), bold: true},
+                    {text: 'Close', action: (toast) => vm.$snotify.remove(toast.id)}
+                  ]
+                }
+              })
+            ).catch(
+              () => reject({
+                title: 'Error',
+                body: 'We got an error!',
+                config: {
+                  closeOnClick: true
+                }
+              })
+            )
+        });
+
+        this.$snotify.async('Generating code...', 'Task', () => snotifyPromise);
 
       } catch (ex) {
         alert(ex);
       }
+	  
       return "";
     }
   }
