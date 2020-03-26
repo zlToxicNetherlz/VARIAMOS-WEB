@@ -53,6 +53,13 @@ export default {
       errors: [] //errors
     };
   },
+  doSureCopy(text) {
+	  this.$copyText(text).then(function (e) {
+		console.log(e)
+	  }, function (e) {
+		console.log(e)
+	  })
+	},
   props: {
     current_graph: {
       type: Object,
